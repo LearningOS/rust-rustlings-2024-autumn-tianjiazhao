@@ -3,12 +3,13 @@
 // Execute `rustlings hint threads3` or use the `hint` watch subcommand for a
 // hint.
 
-// I AM NOT DONE
+
 
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use std::thread::JoinHandle;
 
 struct Queue {
     length: u32,
@@ -26,12 +27,12 @@ impl Queue {
     }
 }
 
-fn send_tx(q: Queue, tx: mpsc::Sender<u32>) -> () {
+fn send_tx(q: Queue, tx: mpsc::Sender<u32>) -> Vec<JoinHandle<()>> {
     let qc = Arc::new(q);
     let qc1 = Arc::clone(&qc);
     let qc2 = Arc::clone(&qc);
-
-    thread::spawn(move || {
+    let tx1 = tx.clone();
+    let h2 = thread::spawn(move || {
         for val in &qc1.first_half {
             println!("sending {:?}", val);
             tx.send(*val).unwrap();
@@ -39,13 +40,14 @@ fn send_tx(q: Queue, tx: mpsc::Sender<u32>) -> () {
         }
     });
 
-    thread::spawn(move || {
+    let h1 = thread::spawn(move || {
         for val in &qc2.second_half {
             println!("sending {:?}", val);
-            tx.send(*val).unwrap();
+            tx1.send(*val).unwrap();
             thread::sleep(Duration::from_secs(1));
         }
     });
+    vec![h1,h2]
 }
 
 fn main() {
@@ -53,12 +55,16 @@ fn main() {
     let queue = Queue::new();
     let queue_length = queue.length;
 
-    send_tx(queue, tx);
+    let vec_h = send_tx(queue, tx);
 
     let mut total_received: u32 = 0;
     for received in rx {
         println!("Got: {}", received);
         total_received += 1;
+    }
+
+    for h in vec_h{
+        h.join().unwrap();
     }
 
     println!("total numbers received: {}", total_received);
